@@ -30,7 +30,7 @@
 
     let sending = false;
     let frameCount = 0;
-    let serverUrl = "https://mit-inventor-server.onrender.com";
+    let serverUrl = "http://192.168.86.247:8080";
 
     function log(text) {
       msg.textContent = text;
@@ -54,7 +54,7 @@
       if (!sending) return;
 
       if (video.videoWidth === 0 || video.videoHeight === 0) {
-        setTimeout(sendOneFrame, 1000);
+        setTimeout(sendOneFrame, 50);
         return;
       }
 
@@ -90,7 +90,7 @@
           return;
         }
 
-        setTimeout(sendOneFrame, 1000); // ~5 fps
+        setTimeout(sendOneFrame, 50); // ~5 fps
       }, "image/jpeg", 0.4);
     }
 
