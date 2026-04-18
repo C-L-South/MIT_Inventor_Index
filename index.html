@@ -54,7 +54,7 @@
       if (!sending) return;
 
       if (video.videoWidth === 0 || video.videoHeight === 0) {
-        setTimeout(sendOneFrame, 100);
+        setTimeout(sendOneFrame, 50);
         return;
       }
 
@@ -90,7 +90,7 @@
           return;
         }
 
-        setTimeout(sendOneFrame, 100); // ~5 fps
+        setTimeout(sendOneFrame, 50); // ~5 fps
       }, "image/jpeg", 0.4);
     }
 
