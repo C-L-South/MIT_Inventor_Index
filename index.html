@@ -27,7 +27,7 @@
     const canvas = document.getElementById("canvas");
     const ctx = canvas.getContext("2d");
     const msg = document.getElementById("msg");
-
+    let nextFrameId = 1;
     let sending = false;
     let frameCount = 0;
     let serverUrl = "https://mit-inventor-server.onrender.com";
@@ -69,7 +69,8 @@
           const formData = new FormData();
           formData.append("frame", blob, "frame.jpg");
           formData.append("timestamp", Date.now().toString());
-
+          const frameId = nextFrameId++;
+          formData.append("frame_id", String(frameId));
           const res = await fetch(serverUrl, {
             method: "POST",
             body: formData
