@@ -54,13 +54,13 @@
       if (!sending) return;
 
       if (video.videoWidth === 0 || video.videoHeight === 0) {
-        setTimeout(sendOneFrame, 100);
+        setTimeout(sendOneFrame, 50);
         return;
       }
 
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      canvas.width = 320;
+      canvas.height = 240;
+      ctx.drawImage(video, 0, 0, 320, 240);
 
       canvas.toBlob(async (blob) => {
         if (!blob || !sending) return;
@@ -90,8 +90,8 @@
           return;
         }
 
-        setTimeout(sendOneFrame, 200); // ~5 fps
-      }, "image/jpeg", 0.7);
+        setTimeout(sendOneFrame, 50); // ~5 fps
+      }, "image/jpeg", 0.4);
     }
 
     document.getElementById("startCamera").onclick = startCamera;
