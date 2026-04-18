@@ -1,0 +1,117 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Send Camera Frames</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body { font-family: sans-serif; margin: 20px; text-align: center; }
+    video { width: 100%; max-width: 480px; background: black; }
+    #msg { margin-top: 12px; white-space: pre-wrap; }
+    button { padding: 10px 16px; font-size: 16px; margin: 6px; }
+  </style>
+</head>
+<body>
+  <h2>Camera Sender</h2>
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas" style="display:none;"></canvas>
+  <div>
+    <button id="startCamera">Start Camera</button>
+    <button id="startSend">Start Sending</button>
+    <button id="stopSend">Stop Sending</button>
+  </div>
+  <div id="msg">Waiting</div>
+
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
+    const msg = document.getElementById("msg");
+
+    let sending = false;
+    let frameCount = 0;
+    let serverUrl = "http://192.168.86.247:8080";
+
+    function log(text) {
+      msg.textContent = text;
+      console.log(text);
+    }
+
+    async function startCamera() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
+        video.srcObject = stream;
+        log("Camera started");
+      } catch (err) {
+        log("Camera error: " + err.message);
+      }
+    }
+
+    async function sendOneFrame() {
+      if (!sending) return;
+
+      if (video.videoWidth === 0 || video.videoHeight === 0) {
+        setTimeout(sendOneFrame, 100);
+        return;
+      }
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      canvas.toBlob(async (blob) => {
+        if (!blob || !sending) return;
+
+        try {
+          const formData = new FormData();
+          formData.append("frame", blob, "frame.jpg");
+          formData.append("timestamp", Date.now().toString());
+
+          const res = await fetch(serverUrl, {
+            method: "POST",
+            body: formData
+          });
+
+          if (!res.ok) {
+            log("Server error: " + res.status);
+            sending = false;
+            return;
+          }
+
+          frameCount++;
+          log("Sent frames: " + frameCount);
+
+        } catch (err) {
+          log("Upload error: " + err.message);
+          sending = false;
+          return;
+        }
+
+        setTimeout(sendOneFrame, 200); // ~5 fps
+      }, "image/jpeg", 0.7);
+    }
+
+    document.getElementById("startCamera").onclick = startCamera;
+
+    document.getElementById("startSend").onclick = () => {
+      if (!video.srcObject) {
+        log("Start camera first");
+        return;
+      }
+      if (sending) return;
+      sending = true;
+      frameCount = 0;
+      log("Sending started");
+      sendOneFrame();
+    };
+
+    document.getElementById("stopSend").onclick = () => {
+      sending = false;
+      log("Sending stopped");
+    };
+  </script>
+</body>
+</html>
