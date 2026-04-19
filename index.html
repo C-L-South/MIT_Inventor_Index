@@ -5,36 +5,155 @@
   <title>Send Camera Frames</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body { font-family: sans-serif; margin: 20px; text-align: center; }
-    video { width: 100%; max-width: 480px; background: black; }
-    #msg { margin-top: 12px; white-space: pre-wrap; }
-    button { padding: 10px 16px; font-size: 16px; margin: 6px; }
+    body {
+      font-family: sans-serif;
+      margin: 20px;
+      text-align: center;
+    }
+
+    .stage {
+      position: relative;
+      display: inline-block;
+      width: 100%;
+      max-width: 480px;
+      background: black;
+    }
+
+    video, canvas {
+      width: 100%;
+      display: block;
+      border-radius: 8px;
+    }
+
+    #overlay {
+      position: absolute;
+      left: 0;
+      top: 0;
+      pointer-events: none;
+    }
+
+    #captureCanvas {
+      display: none;
+    }
+
+    #msg {
+      margin-top: 12px;
+      white-space: pre-wrap;
+      text-align: left;
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+      background: #f5f5f5;
+      padding: 12px;
+      border-radius: 8px;
+    }
+
+    button {
+      padding: 10px 16px;
+      font-size: 16px;
+      margin: 6px;
+    }
   </style>
 </head>
 <body>
-  <h2>Camera Sender</h2>
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="canvas" style="display:none;"></canvas>
+  <h2>Camera Sender + Pose Overlay</h2>
+
+  <div class="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+  </div>
+
+  <canvas id="captureCanvas"></canvas>
+
   <div>
     <button id="startCamera">Start Camera</button>
+    <button id="testServer">Test Server</button>
     <button id="startSend">Start Sending</button>
     <button id="stopSend">Stop Sending</button>
   </div>
+
   <div id="msg">Waiting</div>
 
   <script>
     const video = document.getElementById("video");
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
+    const overlay = document.getElementById("overlay");
+    const overlayCtx = overlay.getContext("2d");
+    const captureCanvas = document.getElementById("captureCanvas");
+    const captureCtx = captureCanvas.getContext("2d");
     const msg = document.getElementById("msg");
+
     let nextFrameId = 1;
     let sending = false;
     let frameCount = 0;
-    let serverUrl = "https://mit-inventor-server.onrender.com";
+    let lastPose = [];
+    let lastRoundTripMs = 0;
+
+    // IMPORTANT: include trailing slash because your Flask route is "/"
+    const serverUrl = "https://mit-inventor-server.onrender.com/";
 
     function log(text) {
       msg.textContent = text;
       console.log(text);
+    }
+
+    function syncOverlaySize() {
+      const rect = video.getBoundingClientRect();
+      overlay.width = rect.width;
+      overlay.height = rect.height;
+    }
+
+    function clearOverlay() {
+      overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
+    }
+
+    function drawPose(keypoints) {
+      clearOverlay();
+
+      if (!Array.isArray(keypoints) || keypoints.length === 0) {
+        return;
+      }
+
+      const threshold = 0.2;
+
+      for (const kp of keypoints) {
+        if (!kp || typeof kp.x !== "number" || typeof kp.y !== "number") continue;
+        if (typeof kp.score === "number" && kp.score < threshold) continue;
+
+        const x = kp.x * overlay.width;
+        const y = kp.y * overlay.height;
+
+        overlayCtx.beginPath();
+        overlayCtx.arc(x, y, 5, 0, Math.PI * 2);
+        overlayCtx.fillStyle = "lime";
+        overlayCtx.fill();
+
+        overlayCtx.font = "12px sans-serif";
+        overlayCtx.fillStyle = "yellow";
+        overlayCtx.fillText(kp.name || "", x + 6, y - 6);
+      }
+
+      // Optional skeleton
+      const edges = [
+        [0, 1], [0, 2], [1, 3], [2, 4],
+        [5, 6], [5, 7], [7, 9], [6, 8], [8, 10],
+        [5, 11], [6, 12], [11, 12],
+        [11, 13], [13, 15], [12, 14], [14, 16]
+      ];
+
+      overlayCtx.strokeStyle = "cyan";
+      overlayCtx.lineWidth = 2;
+
+      for (const [a, b] of edges) {
+        const ka = keypoints[a];
+        const kb = keypoints[b];
+        if (!ka || !kb) continue;
+        if ((ka.score ?? 0) < threshold || (kb.score ?? 0) < threshold) continue;
+
+        overlayCtx.beginPath();
+        overlayCtx.moveTo(ka.x * overlay.width, ka.y * overlay.height);
+        overlayCtx.lineTo(kb.x * overlay.width, kb.y * overlay.height);
+        overlayCtx.stroke();
+      }
     }
 
     async function startCamera() {
@@ -44,9 +163,34 @@
           audio: false
         });
         video.srcObject = stream;
-        log("Camera started");
+
+        await new Promise((resolve) => {
+          video.onloadedmetadata = () => resolve();
+        });
+
+        syncOverlaySize();
+        window.addEventListener("resize", syncOverlaySize);
+
+        log(
+          "Camera started\n" +
+          `Video size: ${video.videoWidth}x${video.videoHeight}`
+        );
       } catch (err) {
         log("Camera error: " + err.message);
+      }
+    }
+
+    async function testServer() {
+      try {
+        const res = await fetch(serverUrl, { method: "GET" });
+        const text = await res.text();
+        log(
+          "Server test:\n" +
+          `HTTP ${res.status}\n` +
+          `Response: ${text}`
+        );
+      } catch (err) {
+        log("Server test failed: " + err.message);
       }
     }
 
@@ -54,36 +198,65 @@
       if (!sending) return;
 
       if (video.videoWidth === 0 || video.videoHeight === 0) {
-        setTimeout(sendOneFrame, 0);
+        setTimeout(sendOneFrame, 100);
         return;
       }
 
-      canvas.width = 320;
-      canvas.height = 240;
-      ctx.drawImage(video, 0, 0, 320, 240);
+      captureCanvas.width = 320;
+      captureCanvas.height = 240;
+      captureCtx.drawImage(video, 0, 0, 320, 240);
 
-      canvas.toBlob(async (blob) => {
+      captureCanvas.toBlob(async (blob) => {
         if (!blob || !sending) return;
 
         try {
+          const frameId = nextFrameId++;
+          const startedAt = performance.now();
+
           const formData = new FormData();
           formData.append("frame", blob, "frame.jpg");
           formData.append("timestamp", Date.now().toString());
-          const frameId = nextFrameId++;
           formData.append("frame_id", String(frameId));
+
           const res = await fetch(serverUrl, {
             method: "POST",
             body: formData
           });
 
+          const elapsed = performance.now() - startedAt;
+          lastRoundTripMs = Math.round(elapsed);
+
           if (!res.ok) {
-            log("Server error: " + res.status);
+            const text = await res.text();
+            log(
+              "Server error\n" +
+              `HTTP ${res.status}\n` +
+              text
+            );
             sending = false;
             return;
           }
 
+          const data = await res.json();
           frameCount++;
-          log("Sent frames: " + frameCount);
+
+          // Show returned pose
+          if (data.pose && Array.isArray(data.pose)) {
+            lastPose = data.pose;
+            drawPose(lastPose);
+          } else {
+            clearOverlay();
+          }
+
+          log(
+            `Sending: yes\n` +
+            `Frames sent: ${frameCount}\n` +
+            `Last frame id: ${frameId}\n` +
+            `Round trip: ${lastRoundTripMs} ms\n` +
+            `Server ok: ${data.ok}\n` +
+            `Server received_frame_id: ${data.received_frame_id ?? "none"}\n` +
+            `Pose points returned: ${Array.isArray(data.pose) ? data.pose.length : 0}`
+          );
 
         } catch (err) {
           log("Upload error: " + err.message);
@@ -91,11 +264,13 @@
           return;
         }
 
-        setTimeout(sendOneFrame, 0); // ~5 fps
-      }, "image/jpeg", 0.4);
+        // About 5 fps
+        setTimeout(sendOneFrame, 200);
+      }, "image/jpeg", 0.6);
     }
 
     document.getElementById("startCamera").onclick = startCamera;
+    document.getElementById("testServer").onclick = testServer;
 
     document.getElementById("startSend").onclick = () => {
       if (!video.srcObject) {
@@ -103,6 +278,7 @@
         return;
       }
       if (sending) return;
+
       sending = true;
       frameCount = 0;
       log("Sending started");
