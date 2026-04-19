@@ -2,117 +2,80 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>MoveNet Pose Detection</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Webcam Test</title>
   <style>
     body {
       margin: 0;
-      overflow: hidden;
       font-family: Arial, sans-serif;
       background: #111;
       color: #fff;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      gap: 16px;
     }
-    canvas {
-      position: absolute;
-      top: 0;
-      left: 0;
+
+    h1 {
+      margin: 0;
+      font-size: 24px;
     }
-    #info {
-      position: absolute;
-      top: 10px;
-      left: 10px;
-      background: rgba(0,0,0,0.5);
-      padding: 10px;
-      border-radius: 8px;
+
+    video {
+      width: min(90vw, 720px);
+      height: auto;
+      background: #000;
+      border-radius: 12px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    #status {
+      font-size: 16px;
+      opacity: 0.9;
+      text-align: center;
+      max-width: 90vw;
+    }
+
+    button {
+      padding: 10px 16px;
+      font-size: 16px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
     }
   </style>
 </head>
 <body>
-  <div id="info">MoveNet Pose Detection (Webcam)</div>
-  <video id="video" playsinline style="display:none"></video>
-  <canvas id="canvas"></canvas>
-
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
+  <h1>Webcam Test</h1>
+  <video id="video" autoplay playsinline muted></video>
+  <button id="startBtn">Start Camera</button>
+  <div id="status">Click “Start Camera” to request webcam access.</div>
 
   <script>
     const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
+    const statusEl = document.getElementById('status');
+    const startBtn = document.getElementById('startBtn');
 
-    let detector;
+    async function startCamera() {
+      statusEl.textContent = 'Requesting camera access...';
 
-    async function setupCamera() {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      video.srcObject = stream;
-      return new Promise((resolve) => {
-        video.onloadedmetadata = () => {
-          resolve(video);
-        };
-      });
-    }
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
 
-    async function init() {
-      await setupCamera();
-      video.play();
-
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      const model = poseDetection.SupportedModels.MoveNet;
-      detector = await poseDetection.createDetector(model, {
-        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-      });
-
-      detectPose();
-    }
-
-    function drawKeypoints(keypoints) {
-      for (const kp of keypoints) {
-        if (kp.score > 0.4) {
-          ctx.beginPath();
-          ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI);
-          ctx.fillStyle = 'lime';
-          ctx.fill();
-        }
+        video.srcObject = stream;
+        statusEl.textContent = 'Camera started successfully.';
+      } catch (error) {
+        console.error(error);
+        statusEl.textContent = 'Camera failed: ' + error.message;
       }
     }
 
-    function drawSkeleton(keypoints) {
-      const adjacentPairs = poseDetection.util.getAdjacentPairs(
-        poseDetection.SupportedModels.MoveNet
-      );
-
-      ctx.strokeStyle = 'cyan';
-      ctx.lineWidth = 2;
-
-      adjacentPairs.forEach(([i, j]) => {
-        const kp1 = keypoints[i];
-        const kp2 = keypoints[j];
-
-        if (kp1.score > 0.4 && kp2.score > 0.4) {
-          ctx.beginPath();
-          ctx.moveTo(kp1.x, kp1.y);
-          ctx.lineTo(kp2.x, kp2.y);
-          ctx.stroke();
-        }
-      });
-    }
-
-    async function detectPose() {
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      const poses = await detector.estimatePoses(video);
-
-      if (poses.length > 0) {
-        const keypoints = poses[0].keypoints;
-        drawKeypoints(keypoints);
-        drawSkeleton(keypoints);
-      }
-
-      requestAnimationFrame(detectPose);
-    }
-
-    init();
+    startBtn.addEventListener('click', startCamera);
   </script>
 </body>
 </html>
