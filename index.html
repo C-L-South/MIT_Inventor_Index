@@ -2,152 +2,39 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>Pose Sender</title>
+  <title>Send Camera Frames</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 20px;
-      text-align: center;
-      background: #f7f7f7;
-    }
-
-    .wrap {
-      position: relative;
-      width: 100%;
-      max-width: 480px;
-      margin: 0 auto;
-    }
-
-    video, canvas {
-      width: 100%;
-      display: block;
-      border-radius: 8px;
-      background: black;
-    }
-
-    #overlay {
-      position: absolute;
-      top: 0;
-      left: 0;
-      pointer-events: none;
-    }
-
-    #captureCanvas {
-      display: none;
-    }
-
-    #msg {
-      margin: 16px auto 0;
-      max-width: 480px;
-      text-align: left;
-      white-space: pre-wrap;
-      background: white;
-      border-radius: 8px;
-      padding: 12px;
-    }
-
-    button {
-      padding: 10px 16px;
-      font-size: 16px;
-      margin: 6px;
-    }
+    body { font-family: sans-serif; margin: 20px; text-align: center; }
+    video { width: 100%; max-width: 480px; background: black; }
+    #msg { margin-top: 12px; white-space: pre-wrap; }
+    button { padding: 10px 16px; font-size: 16px; margin: 6px; }
   </style>
 </head>
 <body>
-  <h2>Camera Pose Client</h2>
-
-  <div class="wrap">
-    <video id="video" autoplay playsinline muted></video>
-    <canvas id="overlay"></canvas>
-  </div>
-
-  <canvas id="captureCanvas"></canvas>
-
+  <h2>Camera Sender</h2>
+  <video id="video" autoplay playsinline muted></video>
+  <canvas id="canvas" style="display:none;"></canvas>
   <div>
     <button id="startCamera">Start Camera</button>
-    <button id="testServer">Test Server</button>
     <button id="startSend">Start Sending</button>
     <button id="stopSend">Stop Sending</button>
   </div>
-
   <div id="msg">Waiting</div>
 
   <script>
     const video = document.getElementById("video");
-    const overlay = document.getElementById("overlay");
-    const overlayCtx = overlay.getContext("2d");
-    const captureCanvas = document.getElementById("captureCanvas");
-    const captureCtx = captureCanvas.getContext("2d");
+    const canvas = document.getElementById("canvas");
+    const ctx = canvas.getContext("2d");
     const msg = document.getElementById("msg");
-
-    const serverUrl = "https://mit-inventor-server.onrender.com/";
-    let sending = false;
     let nextFrameId = 1;
+    let sending = false;
     let frameCount = 0;
-
-    const edges = [
-      [0, 1], [0, 2], [1, 3], [2, 4],
-      [5, 6], [5, 7], [7, 9], [6, 8], [8, 10],
-      [5, 11], [6, 12], [11, 12],
-      [11, 13], [13, 15], [12, 14], [14, 16]
-    ];
+    let serverUrl = "https://mit-inventor-server.onrender.com";
 
     function log(text) {
       msg.textContent = text;
       console.log(text);
-    }
-
-    function resizeOverlay() {
-      const rect = video.getBoundingClientRect();
-      overlay.width = rect.width;
-      overlay.height = rect.height;
-    }
-
-    function clearOverlay() {
-      overlayCtx.clearRect(0, 0, overlay.width, overlay.height);
-    }
-
-    function drawPose(pose) {
-      clearOverlay();
-
-      if (!Array.isArray(pose)) return;
-
-      const threshold = 0.2;
-
-      overlayCtx.lineWidth = 2;
-      overlayCtx.strokeStyle = "cyan";
-
-      for (const [a, b] of edges) {
-        const p1 = pose[a];
-        const p2 = pose[b];
-        if (!p1 || !p2) continue;
-        if ((p1.score ?? 0) < threshold || (p2.score ?? 0) < threshold) continue;
-
-        overlayCtx.beginPath();
-        overlayCtx.moveTo(p1.x * overlay.width, p1.y * overlay.height);
-        overlayCtx.lineTo(p2.x * overlay.width, p2.y * overlay.height);
-        overlayCtx.stroke();
-      }
-
-      for (const p of pose) {
-        if (!p) continue;
-        if ((p.score ?? 0) < threshold) continue;
-
-        const x = p.x * overlay.width;
-        const y = p.y * overlay.height;
-
-        overlayCtx.beginPath();
-        overlayCtx.arc(x, y, 5, 0, Math.PI * 2);
-        overlayCtx.fillStyle = "lime";
-        overlayCtx.fill();
-
-        if (p.name) {
-          overlayCtx.fillStyle = "yellow";
-          overlayCtx.font = "12px sans-serif";
-          overlayCtx.fillText(p.name, x + 6, y - 6);
-        }
-      }
     }
 
     async function startCamera() {
@@ -156,40 +43,10 @@
           video: true,
           audio: false
         });
-
         video.srcObject = stream;
-
-        await new Promise((resolve) => {
-          video.onloadedmetadata = () => resolve();
-        });
-
-        resizeOverlay();
-        window.addEventListener("resize", resizeOverlay);
-
-        log(
-          "Camera started\n" +
-          "Video size: " + video.videoWidth + "x" + video.videoHeight
-        );
+        log("Camera started");
       } catch (err) {
         log("Camera error: " + err.message);
-      }
-    }
-
-    async function testServer() {
-      try {
-        log("Testing server...");
-        const res = await fetch(serverUrl, {
-          method: "GET"
-        });
-        const text = await res.text();
-
-        log(
-          "Server test OK\n" +
-          "HTTP: " + res.status + "\n" +
-          "Body: " + text
-        );
-      } catch (err) {
-        log("Server test failed: " + err.message);
       }
     }
 
@@ -197,91 +54,57 @@
       if (!sending) return;
 
       if (video.videoWidth === 0 || video.videoHeight === 0) {
-        setTimeout(sendOneFrame, 200);
+        setTimeout(sendOneFrame, 0);
         return;
       }
 
-      captureCanvas.width = 320;
-      captureCanvas.height = 240;
-      captureCtx.drawImage(video, 0, 0, 320, 240);
+      canvas.width = 320;
+      canvas.height = 240;
+      ctx.drawImage(video, 0, 0, 320, 240);
 
-      captureCanvas.toBlob(async (blob) => {
+      canvas.toBlob(async (blob) => {
         if (!blob || !sending) return;
-
-        const frameId = nextFrameId++;
 
         try {
           const formData = new FormData();
           formData.append("frame", blob, "frame.jpg");
-          formData.append("frame_id", String(frameId));
           formData.append("timestamp", Date.now().toString());
-
+          const frameId = nextFrameId++;
+          formData.append("frame_id", String(frameId));
           const res = await fetch(serverUrl, {
             method: "POST",
             body: formData
           });
 
-          const text = await res.text();
-
           if (!res.ok) {
-            log(
-              "POST failed\n" +
-              "HTTP: " + res.status + "\n" +
-              text
-            );
-            sending = false;
-            return;
-          }
-
-          let data;
-          try {
-            data = JSON.parse(text);
-          } catch {
-            log("Server returned non-JSON:\n" + text);
+            log("Server error: " + res.status);
             sending = false;
             return;
           }
 
           frameCount++;
+          log("Sent frames: " + frameCount);
 
-          if (Array.isArray(data.pose)) {
-            drawPose(data.pose);
-          } else {
-            clearOverlay();
-          }
-
-          log(
-            "Sending: yes\n" +
-            "Frames sent: " + frameCount + "\n" +
-            "Last frame id: " + frameId + "\n" +
-            "Server ok: " + data.ok + "\n" +
-            "Server received_frame_id: " + (data.received_frame_id ?? "none") + "\n" +
-            "Pose points returned: " + (Array.isArray(data.pose) ? data.pose.length : 0)
-          );
         } catch (err) {
           log("Upload error: " + err.message);
           sending = false;
           return;
         }
 
-        setTimeout(sendOneFrame, 500);
-      }, "image/jpeg", 0.6);
+        setTimeout(sendOneFrame, 0); // ~5 fps
+      }, "image/jpeg", 0.4);
     }
 
     document.getElementById("startCamera").onclick = startCamera;
-    document.getElementById("testServer").onclick = testServer;
 
     document.getElementById("startSend").onclick = () => {
       if (!video.srcObject) {
         log("Start camera first");
         return;
       }
-
       if (sending) return;
-
       sending = true;
       frameCount = 0;
-      nextFrameId = 1;
       log("Sending started");
       sendOneFrame();
     };
