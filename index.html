@@ -28,8 +28,6 @@
 
     #stage {
       position: relative;
-      width: min(90vw, 720px);
-      aspect-ratio: 16 / 9;
       background: #000;
       border-radius: 12px;
       overflow: hidden;
@@ -39,13 +37,12 @@
     video,
     canvas {
       position: absolute;
-      inset: 0;
-      width: 100%;
-      height: 100%;
+      top: 0;
+      left: 0;
+      display: block;
     }
 
     video {
-      object-fit: cover;
       background: #000;
     }
 
@@ -96,6 +93,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
   <script>
+    const stage = document.getElementById('stage');
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
@@ -108,8 +106,16 @@
     function resizeCanvasToVideo() {
       const width = video.videoWidth || 640;
       const height = video.videoHeight || 480;
+
       canvas.width = width;
       canvas.height = height;
+
+      canvas.style.width = width + 'px';
+      canvas.style.height = height + 'px';
+      video.style.width = width + 'px';
+      video.style.height = height + 'px';
+      stage.style.width = width + 'px';
+      stage.style.height = height + 'px';
     }
 
     function drawKeypoints(keypoints) {
@@ -191,3 +197,4 @@
   </script>
 </body>
 </html>
+
