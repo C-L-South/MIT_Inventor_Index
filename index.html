@@ -1,118 +1,118 @@
-<!doctype html>
-<html>
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
-  <title>Send Camera Frames</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta charset="UTF-8" />
+  <title>MoveNet Pose Detection</title>
   <style>
-    body { font-family: sans-serif; margin: 20px; text-align: center; }
-    video { width: 100%; max-width: 480px; background: black; }
-    #msg { margin-top: 12px; white-space: pre-wrap; }
-    button { padding: 10px 16px; font-size: 16px; margin: 6px; }
+    body {
+      margin: 0;
+      overflow: hidden;
+      font-family: Arial, sans-serif;
+      background: #111;
+      color: #fff;
+    }
+    canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+    }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.5);
+      padding: 10px;
+      border-radius: 8px;
+    }
   </style>
 </head>
 <body>
-  <h2>Camera Sender</h2>
-  <video id="video" autoplay playsinline muted></video>
-  <canvas id="canvas" style="display:none;"></canvas>
-  <div>
-    <button id="startCamera">Start Camera</button>
-    <button id="startSend">Start Sending</button>
-    <button id="stopSend">Stop Sending</button>
-  </div>
-  <div id="msg">Waiting</div>
+  <div id="info">MoveNet Pose Detection (Webcam)</div>
+  <video id="video" playsinline style="display:none"></video>
+  <canvas id="canvas"></canvas>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
   <script>
-    const video = document.getElementById("video");
-    const canvas = document.getElementById("canvas");
-    const ctx = canvas.getContext("2d");
-    const msg = document.getElementById("msg");
-    let nextFrameId = 1;
-    let sending = false;
-    let frameCount = 0;
-    let serverUrl = "https://mit-inventor-server.onrender.com";
+    const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
 
-    function log(text) {
-      msg.textContent = text;
-      console.log(text);
+    let detector;
+
+    async function setupCamera() {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+      video.srcObject = stream;
+      return new Promise((resolve) => {
+        video.onloadedmetadata = () => {
+          resolve(video);
+        };
+      });
     }
 
-    async function startCamera() {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false
-        });
-        video.srcObject = stream;
-        log("Camera started");
-      } catch (err) {
-        log("Camera error: " + err.message);
-      }
+    async function init() {
+      await setupCamera();
+      video.play();
+
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      const model = poseDetection.SupportedModels.MoveNet;
+      detector = await poseDetection.createDetector(model, {
+        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+      });
+
+      detectPose();
     }
 
-    async function sendOneFrame() {
-      if (!sending) return;
-
-      if (video.videoWidth === 0 || video.videoHeight === 0) {
-        setTimeout(sendOneFrame, 1000);
-        return;
-      }
-
-      canvas.width = 320;
-      canvas.height = 240;
-      ctx.drawImage(video, 0, 0, 320, 240);
-
-      canvas.toBlob(async (blob) => {
-        if (!blob || !sending) return;
-
-        try {
-          const formData = new FormData();
-          formData.append("frame", blob, "frame.jpg");
-          formData.append("timestamp", Date.now().toString());
-          const frameId = nextFrameId++;
-          formData.append("frame_id", String(frameId));
-          const res = await fetch(serverUrl, {
-            method: "POST",
-            body: formData
-          });
-
-          if (!res.ok) {
-            log("Server error: " + res.status);
-            sending = false;
-            return;
-          }
-
-          frameCount++;
-          log("Sent frames: " + frameCount);
-
-        } catch (err) {
-          log("Upload error: " + err.message);
-          sending = false;
-          return;
+    function drawKeypoints(keypoints) {
+      for (const kp of keypoints) {
+        if (kp.score > 0.4) {
+          ctx.beginPath();
+          ctx.arc(kp.x, kp.y, 5, 0, 2 * Math.PI);
+          ctx.fillStyle = 'lime';
+          ctx.fill();
         }
-
-        setTimeout(sendOneFrame, 1000); // ~5 fps
-      }, "image/jpeg", 0.4);
+      }
     }
 
-    document.getElementById("startCamera").onclick = startCamera;
+    function drawSkeleton(keypoints) {
+      const adjacentPairs = poseDetection.util.getAdjacentPairs(
+        poseDetection.SupportedModels.MoveNet
+      );
 
-    document.getElementById("startSend").onclick = () => {
-      if (!video.srcObject) {
-        log("Start camera first");
-        return;
+      ctx.strokeStyle = 'cyan';
+      ctx.lineWidth = 2;
+
+      adjacentPairs.forEach(([i, j]) => {
+        const kp1 = keypoints[i];
+        const kp2 = keypoints[j];
+
+        if (kp1.score > 0.4 && kp2.score > 0.4) {
+          ctx.beginPath();
+          ctx.moveTo(kp1.x, kp1.y);
+          ctx.lineTo(kp2.x, kp2.y);
+          ctx.stroke();
+        }
+      });
+    }
+
+    async function detectPose() {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      const poses = await detector.estimatePoses(video);
+
+      if (poses.length > 0) {
+        const keypoints = poses[0].keypoints;
+        drawKeypoints(keypoints);
+        drawSkeleton(keypoints);
       }
-      if (sending) return;
-      sending = true;
-      frameCount = 0;
-      log("Sending started");
-      sendOneFrame();
-    };
 
-    document.getElementById("stopSend").onclick = () => {
-      sending = false;
-      log("Sending stopped");
-    };
+      requestAnimationFrame(detectPose);
+    }
+
+    init();
   </script>
 </body>
 </html>
