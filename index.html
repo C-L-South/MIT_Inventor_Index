@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Webcam + MoveNet Step 1</title>
+  <title>Webcam + MoveNet Step 2</title>
   <style>
     body {
       margin: 0;
@@ -53,6 +53,13 @@
       pointer-events: none;
     }
 
+    #controls {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
     #status {
       font-size: 16px;
       opacity: 0.95;
@@ -78,8 +85,12 @@
     <canvas id="canvas"></canvas>
   </div>
 
-  <button id="startBtn">Start Camera</button>
-  <div id="status">Step 1: camera only, but TensorFlow.js and MoveNet are loaded in the page.</div>
+  <div id="controls">
+    <button id="startBtn">Start Camera</button>
+    <button id="detectBtn" disabled>Run One Detection</button>
+  </div>
+
+  <div id="status">Step 2: load MoveNet, then run one pose detection on button press.</div>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
@@ -90,6 +101,7 @@
     const ctx = canvas.getContext('2d');
     const statusEl = document.getElementById('status');
     const startBtn = document.getElementById('startBtn');
+    const detectBtn = document.getElementById('detectBtn');
 
     let detector = null;
 
@@ -124,14 +136,36 @@
           modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
         });
 
-        statusEl.textContent = 'Step 1 passed: camera works and MoveNet loaded successfully.';
+        detectBtn.disabled = false;
+        statusEl.textContent = 'MoveNet loaded. Tap “Run One Detection”.';
       } catch (error) {
         console.error(error);
         statusEl.textContent = 'Failed: ' + error.message;
       }
     }
 
+    async function runOneDetection() {
+      if (!detector) {
+        statusEl.textContent = 'Detector is not loaded yet.';
+        return;
+      }
+
+      try {
+        statusEl.textContent = 'Running one pose detection...';
+        const poses = await detector.estimatePoses(video);
+        const count = poses.length;
+        const keypointCount = count > 0 && poses[0].keypoints ? poses[0].keypoints.length : 0;
+
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        statusEl.textContent = 'Detection worked. Poses found: ' + count + '. Keypoints in first pose: ' + keypointCount + '.';
+      } catch (error) {
+        console.error(error);
+        statusEl.textContent = 'Detection failed: ' + error.message;
+      }
+    }
+
     startBtn.addEventListener('click', startCamera);
+    detectBtn.addEventListener('click', runOneDetection);
   </script>
 </body>
 </html>
