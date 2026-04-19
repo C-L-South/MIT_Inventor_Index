@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Webcam Test</title>
+  <title>Webcam + MoveNet Step 1</title>
   <style>
     body {
       margin: 0;
@@ -16,26 +16,49 @@
       justify-content: center;
       min-height: 100vh;
       gap: 16px;
+      padding: 16px;
+      box-sizing: border-box;
     }
 
     h1 {
       margin: 0;
       font-size: 24px;
+      text-align: center;
+    }
+
+    #stage {
+      position: relative;
+      width: min(90vw, 720px);
+      aspect-ratio: 16 / 9;
+      background: #000;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    video,
+    canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
     }
 
     video {
-      width: min(90vw, 720px);
-      height: auto;
+      object-fit: cover;
       background: #000;
-      border-radius: 12px;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+
+    canvas {
+      pointer-events: none;
     }
 
     #status {
       font-size: 16px;
-      opacity: 0.9;
+      opacity: 0.95;
       text-align: center;
       max-width: 90vw;
+      white-space: pre-wrap;
     }
 
     button {
@@ -48,15 +71,34 @@
   </style>
 </head>
 <body>
-  <h1>Webcam Test</h1>
-  <video id="video" autoplay playsinline muted></video>
+  <h1>Webcam + MoveNet Test</h1>
+
+  <div id="stage">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="canvas"></canvas>
+  </div>
+
   <button id="startBtn">Start Camera</button>
-  <div id="status">Click “Start Camera” to request webcam access.</div>
+  <div id="status">Step 1: camera only, but TensorFlow.js and MoveNet are loaded in the page.</div>
+
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
   <script>
     const video = document.getElementById('video');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
     const statusEl = document.getElementById('status');
     const startBtn = document.getElementById('startBtn');
+
+    let detector = null;
+
+    function resizeCanvasToVideo() {
+      const width = video.videoWidth || 640;
+      const height = video.videoHeight || 480;
+      canvas.width = width;
+      canvas.height = height;
+    }
 
     async function startCamera() {
       statusEl.textContent = 'Requesting camera access...';
@@ -68,10 +110,24 @@
         });
 
         video.srcObject = stream;
-        statusEl.textContent = 'Camera started successfully.';
+
+        await new Promise((resolve) => {
+          video.onloadedmetadata = resolve;
+        });
+
+        resizeCanvasToVideo();
+        statusEl.textContent = 'Camera started. Loading MoveNet...';
+
+        await tf.ready();
+        const model = poseDetection.SupportedModels.MoveNet;
+        detector = await poseDetection.createDetector(model, {
+          modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+        });
+
+        statusEl.textContent = 'Step 1 passed: camera works and MoveNet loaded successfully.';
       } catch (error) {
         console.error(error);
-        statusEl.textContent = 'Camera failed: ' + error.message;
+        statusEl.textContent = 'Failed: ' + error.message;
       }
     }
 
