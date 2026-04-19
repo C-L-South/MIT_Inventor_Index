@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Webcam + MoveNet Step 2</title>
+  <title>Webcam + MoveNet Step 3</title>
   <style>
     body {
       margin: 0;
@@ -87,10 +87,10 @@
 
   <div id="controls">
     <button id="startBtn">Start Camera</button>
-    <button id="detectBtn" disabled>Run One Detection</button>
+    <button id="detectBtn" disabled>Detect + Draw Once</button>
   </div>
 
-  <div id="status">Step 2: load MoveNet, then run one pose detection on button press.</div>
+  <div id="status">Step 3: run one detection and draw keypoints on the canvas.</div>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
@@ -110,6 +110,24 @@
       const height = video.videoHeight || 480;
       canvas.width = width;
       canvas.height = height;
+    }
+
+    function drawKeypoints(keypoints) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = 'lime';
+
+      let drawn = 0;
+
+      for (const kp of keypoints) {
+        if (kp.score > 0.3) {
+          ctx.beginPath();
+          ctx.arc(kp.x, kp.y, 5, 0, Math.PI * 2);
+          ctx.fill();
+          drawn++;
+        }
+      }
+
+      return drawn;
     }
 
     async function startCamera() {
@@ -137,27 +155,31 @@
         });
 
         detectBtn.disabled = false;
-        statusEl.textContent = 'MoveNet loaded. Tap “Run One Detection”.';
+        statusEl.textContent = 'MoveNet loaded. Tap “Detect + Draw Once”.';
       } catch (error) {
         console.error(error);
         statusEl.textContent = 'Failed: ' + error.message;
       }
     }
 
-    async function runOneDetection() {
+    async function detectAndDrawOnce() {
       if (!detector) {
         statusEl.textContent = 'Detector is not loaded yet.';
         return;
       }
 
       try {
-        statusEl.textContent = 'Running one pose detection...';
+        statusEl.textContent = 'Running detection and drawing keypoints...';
         const poses = await detector.estimatePoses(video);
-        const count = poses.length;
-        const keypointCount = count > 0 && poses[0].keypoints ? poses[0].keypoints.length : 0;
-
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        statusEl.textContent = 'Detection worked. Poses found: ' + count + '. Keypoints in first pose: ' + keypointCount + '.';
+
+        if (!poses.length) {
+          statusEl.textContent = 'Detection worked, but no pose was found.';
+          return;
+        }
+
+        const drawn = drawKeypoints(poses[0].keypoints || []);
+        statusEl.textContent = 'Detection worked. Keypoints drawn: ' + drawn + '.';
       } catch (error) {
         console.error(error);
         statusEl.textContent = 'Detection failed: ' + error.message;
@@ -165,7 +187,7 @@
     }
 
     startBtn.addEventListener('click', startCamera);
-    detectBtn.addEventListener('click', runOneDetection);
+    detectBtn.addEventListener('click', detectAndDrawOnce);
   </script>
 </body>
 </html>
