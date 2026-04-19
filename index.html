@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Webcam + MoveNet Step 3</title>
+  <title>MoveNet Pose Detection</title>
   <style>
     body {
       margin: 0;
@@ -32,6 +32,8 @@
       border-radius: 12px;
       overflow: hidden;
       box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+      max-width: 95vw;
+      max-height: 75vh;
     }
 
     video,
@@ -75,7 +77,7 @@
   </style>
 </head>
 <body>
-  <h1>Webcam + MoveNet Test</h1>
+  <h1>MoveNet Pose Detection</h1>
 
   <div id="stage">
     <video id="video" autoplay playsinline muted></video>
@@ -84,10 +86,10 @@
 
   <div id="controls">
     <button id="startBtn">Start Camera</button>
-    <button id="detectBtn" disabled>Detect + Draw Once</button>
+    <button id="stopBtn" disabled>Stop</button>
   </div>
 
-  <div id="status">Step 3: run one detection and draw keypoints on the canvas.</div>
+  <div id="status">Press “Start Camera” to begin live pose detection.</div>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
@@ -99,11 +101,14 @@
     const ctx = canvas.getContext('2d');
     const statusEl = document.getElementById('status');
     const startBtn = document.getElementById('startBtn');
-    const detectBtn = document.getElementById('detectBtn');
+    const stopBtn = document.getElementById('stopBtn');
 
     let detector = null;
+    let animationId = null;
+    let streamRef = null;
+    let running = false;
 
-    function resizeCanvasToVideo() {
+    function resizeToVideo() {
       const width = video.videoWidth || 640;
       const height = video.videoHeight || 480;
 
@@ -119,81 +124,128 @@
     }
 
     function drawKeypoints(keypoints) {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = 'lime';
-
-      let drawn = 0;
-
       for (const kp of keypoints) {
         if (kp.score > 0.3) {
           ctx.beginPath();
           ctx.arc(kp.x, kp.y, 5, 0, Math.PI * 2);
+          ctx.fillStyle = 'lime';
           ctx.fill();
-          drawn++;
         }
       }
+    }
 
-      return drawn;
+    function drawSkeleton(keypoints) {
+      const adjacentPairs = poseDetection.util.getAdjacentPairs(
+        poseDetection.SupportedModels.MoveNet
+      );
+
+      ctx.strokeStyle = 'cyan';
+      ctx.lineWidth = 2;
+
+      for (const [i, j] of adjacentPairs) {
+        const kp1 = keypoints[i];
+        const kp2 = keypoints[j];
+
+        if (kp1 && kp2 && kp1.score > 0.3 && kp2.score > 0.3) {
+          ctx.beginPath();
+          ctx.moveTo(kp1.x, kp1.y);
+          ctx.lineTo(kp2.x, kp2.y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    async function setupDetector() {
+      if (detector) return detector;
+
+      await tf.ready();
+      const model = poseDetection.SupportedModels.MoveNet;
+      detector = await poseDetection.createDetector(model, {
+        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
+      });
+      return detector;
+    }
+
+    async function detectPose() {
+      if (!running) return;
+
+      try {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const poses = await detector.estimatePoses(video);
+
+        if (poses.length > 0) {
+          const keypoints = poses[0].keypoints || [];
+          drawSkeleton(keypoints);
+          drawKeypoints(keypoints);
+        }
+
+        animationId = requestAnimationFrame(detectPose);
+      } catch (error) {
+        console.error(error);
+        statusEl.textContent = 'Detection failed: ' + error.message;
+        stopCamera();
+      }
     }
 
     async function startCamera() {
-      statusEl.textContent = 'Requesting camera access...';
+      if (running) return;
 
       try {
+        statusEl.textContent = 'Requesting camera access...';
+
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: false
         });
 
+        streamRef = stream;
         video.srcObject = stream;
 
         await new Promise((resolve) => {
           video.onloadedmetadata = resolve;
         });
 
-        resizeCanvasToVideo();
-        statusEl.textContent = 'Camera started. Loading MoveNet...';
+        await video.play();
+        resizeToVideo();
 
-        await tf.ready();
-        const model = poseDetection.SupportedModels.MoveNet;
-        detector = await poseDetection.createDetector(model, {
-          modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-        });
+        statusEl.textContent = 'Loading MoveNet...';
+        await setupDetector();
 
-        detectBtn.disabled = false;
-        statusEl.textContent = 'MoveNet loaded. Tap “Detect + Draw Once”.';
+        running = true;
+        startBtn.disabled = true;
+        stopBtn.disabled = false;
+        statusEl.textContent = 'Live pose detection running.';
+
+        detectPose();
       } catch (error) {
         console.error(error);
         statusEl.textContent = 'Failed: ' + error.message;
       }
     }
 
-    async function detectAndDrawOnce() {
-      if (!detector) {
-        statusEl.textContent = 'Detector is not loaded yet.';
-        return;
+    function stopCamera() {
+      running = false;
+
+      if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
       }
 
-      try {
-        statusEl.textContent = 'Running detection and drawing keypoints...';
-        const poses = await detector.estimatePoses(video);
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-        if (!poses.length) {
-          statusEl.textContent = 'Detection worked, but no pose was found.';
-          return;
-        }
-
-        const drawn = drawKeypoints(poses[0].keypoints || []);
-        statusEl.textContent = 'Detection worked. Keypoints drawn: ' + drawn + '.';
-      } catch (error) {
-        console.error(error);
-        statusEl.textContent = 'Detection failed: ' + error.message;
+      if (streamRef) {
+        streamRef.getTracks().forEach(track => track.stop());
+        streamRef = null;
       }
+
+      video.srcObject = null;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+      statusEl.textContent = 'Stopped.';
     }
 
     startBtn.addEventListener('click', startCamera);
-    detectBtn.addEventListener('click', detectAndDrawOnce);
+    stopBtn.addEventListener('click', stopCamera);
   </script>
 </body>
 </html>
