@@ -187,13 +187,7 @@
         stopCamera();
       }
     }
-    function receiveFromApp(command) {
-      if (command === 'start') {
-        startCamera();
-      } else if (command === 'stop') {
-        stopCamera();
-      }
-    }
+
     async function startCamera() {
       if (running) return;
 
@@ -250,7 +244,13 @@
       stopBtn.disabled = true;
       statusEl.textContent = 'Stopped.';
     }
-
+    function receiveFromApp(command) {
+      if (command === 'start') {
+        startCamera();
+      } else if (command === 'stop') {
+        stopCamera();
+      }
+    }
     startBtn.addEventListener('click', startCamera);
     stopBtn.addEventListener('click', stopCamera);
   </script>
