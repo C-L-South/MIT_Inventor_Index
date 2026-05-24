@@ -3,126 +3,64 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>MoveNet Pose Detection</title>
+  <title>MoveNet</title>
   <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #111;
-      color: #fff;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      min-height: 100vh;
-      gap: 16px;
-      padding: 16px;
-      box-sizing: border-box;
-    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
 
-    h1 {
-      margin: 0;
-      font-size: 24px;
-      text-align: center;
+    body {
+      background: #000;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
     }
 
     #stage {
       position: relative;
-      background: #000;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-      max-width: 95vw;
-      max-height: 75vh;
+      width: 100vw;
+      height: 100vh;
     }
 
-    video,
-    canvas {
+    video, canvas {
       position: absolute;
       top: 0;
       left: 0;
+      width: 100vw;
+      height: 100vh;
+      object-fit: cover;
       display: block;
-    }
-
-    video {
-      background: #000;
     }
 
     canvas {
       pointer-events: none;
     }
-
-    #controls {
-      display: flex;
-      gap: 12px;
-      flex-wrap: wrap;
-      justify-content: center;
-    }
-
-    #status {
-      font-size: 16px;
-      opacity: 0.95;
-      text-align: center;
-      max-width: 90vw;
-      white-space: pre-wrap;
-    }
-
-    button {
-      padding: 10px 16px;
-      font-size: 16px;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-    }
   </style>
 </head>
 <body>
-  <h1>MoveNet Pose Detection</h1>
-
   <div id="stage">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
   </div>
 
-  <div id="controls">
-    <button id="startBtn">Start Camera</button>
-    <button id="stopBtn" disabled>Stop</button>
-  </div>
-
-  <div id="status">Press “Start Camera” to begin live pose detection.</div>
-
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
   <script>
-    
-    const stage = document.getElementById('stage');
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
     const ctx = canvas.getContext('2d');
-    const statusEl = document.getElementById('status');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
 
     let detector = null;
     let animationId = null;
     let streamRef = null;
     let running = false;
 
-    function resizeToVideo() {
-      const width = video.videoWidth || 640;
-      const height = video.videoHeight || 480;
-
-      canvas.width = width;
-      canvas.height = height;
-
-      canvas.style.width = width + 'px';
-      canvas.style.height = height + 'px';
-      video.style.width = width + 'px';
-      video.style.height = height + 'px';
-      stage.style.width = width + 'px';
-      stage.style.height = height + 'px';
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
     }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
     function drawKeypoints(keypoints) {
       for (const kp of keypoints) {
@@ -139,14 +77,11 @@
       const adjacentPairs = poseDetection.util.getAdjacentPairs(
         poseDetection.SupportedModels.MoveNet
       );
-
       ctx.strokeStyle = 'cyan';
       ctx.lineWidth = 2;
-
       for (const [i, j] of adjacentPairs) {
         const kp1 = keypoints[i];
         const kp2 = keypoints[j];
-
         if (kp1 && kp2 && kp1.score > 0.3 && kp2.score > 0.3) {
           ctx.beginPath();
           ctx.moveTo(kp1.x, kp1.y);
@@ -158,102 +93,64 @@
 
     async function setupDetector() {
       if (detector) return detector;
-
       await tf.ready();
-      const model = poseDetection.SupportedModels.MoveNet;
-      detector = await poseDetection.createDetector(model, {
-        modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING
-      });
+      detector = await poseDetection.createDetector(
+        poseDetection.SupportedModels.MoveNet,
+        { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
+      );
       return detector;
     }
 
     async function detectPose() {
       if (!running) return;
-
       try {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         const poses = await detector.estimatePoses(video);
-
         if (poses.length > 0) {
           const keypoints = poses[0].keypoints || [];
           drawSkeleton(keypoints);
           drawKeypoints(keypoints);
         }
-
         animationId = requestAnimationFrame(detectPose);
       } catch (error) {
         console.error(error);
-        statusEl.textContent = 'Detection failed: ' + error.message;
         stopCamera();
       }
     }
 
     async function startCamera() {
       if (running) return;
-
       try {
-        statusEl.textContent = 'Requesting camera access...';
-
         const stream = await navigator.mediaDevices.getUserMedia({
           video: true,
           audio: false
         });
-
         streamRef = stream;
         video.srcObject = stream;
-
-        await new Promise((resolve) => {
-          video.onloadedmetadata = resolve;
-        });
-
+        await new Promise((resolve) => { video.onloadedmetadata = resolve; });
         await video.play();
-        resizeToVideo();
-
-        statusEl.textContent = 'Loading MoveNet...';
+        resizeCanvas();
         await setupDetector();
-
         running = true;
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-        statusEl.textContent = 'Live pose detection running.';
-
         detectPose();
       } catch (error) {
         console.error(error);
-        statusEl.textContent = 'Failed: ' + error.message;
       }
     }
 
     function stopCamera() {
       running = false;
-
-      if (animationId) {
-        cancelAnimationFrame(animationId);
-        animationId = null;
-      }
-
-      if (streamRef) {
-        streamRef.getTracks().forEach(track => track.stop());
-        streamRef = null;
-      }
-
+      if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+      if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null; }
       video.srcObject = null;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
 
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
-      statusEl.textContent = 'Stopped.';
-    }
+    // App Inventor control
     function receiveFromApp(command) {
-      if (command === 'start') {
-        startCamera();
-      } else if (command === 'stop') {
-        stopCamera();
-      }
+      if (command === 'start') startCamera();
+      else if (command === 'stop') stopCamera();
     }
-    startBtn.addEventListener('click', startCamera);
-    stopBtn.addEventListener('click', stopCamera);
   </script>
 </body>
 </html>
-
