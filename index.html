@@ -95,6 +95,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
 
   <script>
+    
     const stage = document.getElementById('stage');
     const video = document.getElementById('video');
     const canvas = document.getElementById('canvas');
@@ -186,7 +187,13 @@
         stopCamera();
       }
     }
-
+    function receiveFromApp(command) {
+      if (command === 'start') {
+        startCamera();
+      } else if (command === 'stop') {
+        stopCamera();
+      }
+    }
     async function startCamera() {
       if (running) return;
 
