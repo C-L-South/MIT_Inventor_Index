@@ -62,18 +62,18 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas();
 
-    function drawKeypoints(keypoints) {
+    function drawKeypoints(keypoints, scale, offsetX, offsetY) {
       for (const kp of keypoints) {
         if (kp.score > 0.3) {
           ctx.beginPath();
-          ctx.arc(kp.x, kp.y, 5, 0, Math.PI * 2);
+          ctx.arc(kp.x * scale + offsetX, kp.y * scale + offsetY, 5, 0, Math.PI * 2);
           ctx.fillStyle = 'lime';
           ctx.fill();
         }
       }
     }
 
-    function drawSkeleton(keypoints) {
+    function drawSkeleton(keypoints, scale, offsetX, offsetY) {
       const adjacentPairs = poseDetection.util.getAdjacentPairs(
         poseDetection.SupportedModels.MoveNet
       );
@@ -84,8 +84,8 @@
         const kp2 = keypoints[j];
         if (kp1 && kp2 && kp1.score > 0.3 && kp2.score > 0.3) {
           ctx.beginPath();
-          ctx.moveTo(kp1.x, kp1.y);
-          ctx.lineTo(kp2.x, kp2.y);
+          ctx.moveTo(kp1.x * scale + offsetX, kp1.y * scale + offsetY);
+          ctx.lineTo(kp2.x * scale + offsetX, kp2.y * scale + offsetY);
           ctx.stroke();
         }
       }
@@ -102,6 +102,67 @@
     }
 
     async function detectPose() {
+      if (!running) return;
+      try {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const poses = await detector.estimatePoses(video);
+
+        if (poses.length > 0) {
+          const keypoints = poses[0].keypoints || [];
+
+          const scaleX = canvas.width / video.videoWidth;
+          const scaleY = canvas.height / video.videoHeight;
+          const scale = Math.max(scaleX, scaleY);
+          const offsetX = (canvas.width  - video.videoWidth  * scale) / 2;
+          const offsetY = (canvas.height - video.videoHeight * scale) / 2;
+
+          drawSkeleton(keypoints, scale, offsetX, offsetY);
+          drawKeypoints(keypoints, scale, offsetX, offsetY);
+        }
+
+        animationId = requestAnimationFrame(detectPose);
+      } catch (error) {
+        console.error(error);
+        stopCamera();
+      }
+    }
+
+    async function startCamera() {
+      if (running) return;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: false
+        });
+        streamRef = stream;
+        video.srcObject = stream;
+        await new Promise((resolve) => { video.onloadedmetadata = resolve; });
+        await video.play();
+        resizeCanvas();
+        await setupDetector();
+        running = true;
+        detectPose();
+      } catch (error) {
+        console.error(error);
+      }
+    }
+
+    function stopCamera() {
+      running = false;
+      if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
+      if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null; }
+      video.srcObject = null;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+
+    // App Inventor control
+    function receiveFromApp(command) {
+      if (command === 'start') startCamera();
+      else if (command === 'stop') stopCamera();
+    }
+  </script>
+</body>
+</html>etectPose() {
       if (!running) return;
       try {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
