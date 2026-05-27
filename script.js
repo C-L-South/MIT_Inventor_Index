@@ -311,4 +311,4 @@ function compute(row){
     document.getElementById("similarityText").textContent =
     `similarity: ${similarity.toFixed(4)}`;
 }
-startCamera();
+
