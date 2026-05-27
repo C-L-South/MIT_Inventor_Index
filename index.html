@@ -34,185 +34,80 @@
     canvas {
       pointer-events: none;
     }
+    #output {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 10;
+
+    color: lime;
+    background: rgba(0, 0, 0, 0.65);
+    padding: 10px;
+    border-radius: 6px;
+
+    font-size: 12px;
+    max-width: 95vw;
+    white-space: pre-wrap;
+    word-break: break-word;
+    }
+    #similarityBox {
+    position: absolute;
+    bottom: 30px;
+    right: 30px;
+    z-index: 20;
+
+    width: 50px;
+    height: 350px;
+
+    border: 3px solid white;
+    background: #222;
+
+    display: flex;
+    align-items: flex-end;
+
+    overflow: hidden;
+    border-radius: 10px;
+    }
+
+    #similarityBar {
+    width: 100%;
+    height: 0%;
+
+    background: lime;
+
+    transition: height 0.08s linear;
+    }
+
+    #similarityText {
+    position: absolute;
+    bottom: 390px;
+    right: 30px;
+    z-index: 20;
+
+    color: white;
+    font-family: monospace;
+    font-size: 18px;
+
+    background: rgba(0,0,0,0.65);
+    padding: 6px 10px;
+    border-radius: 6px;
+    }
   </style>
 </head>
 <body>
+  
   <div id="stage">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
+    <pre id="output"></pre>
+    <div id="similarityBox">
+    <div id="similarityBar"></div>
+    </div>
+    <p id="similarityText">similarity: 0.0000</p>
   </div>
 
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
   <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection"></script>
-
-  <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const ctx = canvas.getContext('2d');
-
-    let detector = null;
-    let animationId = null;
-    let streamRef = null;
-    let running = false;
-
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-
-    function drawKeypoints(keypoints, scale, offsetX, offsetY) {
-      for (const kp of keypoints) {
-        if (kp.score > 0.3) {
-          ctx.beginPath();
-          ctx.arc(kp.x * scale + offsetX, kp.y * scale + offsetY, 5, 0, Math.PI * 2);
-          ctx.fillStyle = 'lime';
-          ctx.fill();
-        }
-      }
-    }
-
-    function drawSkeleton(keypoints, scale, offsetX, offsetY) {
-      const adjacentPairs = poseDetection.util.getAdjacentPairs(
-        poseDetection.SupportedModels.MoveNet
-      );
-      ctx.strokeStyle = 'cyan';
-      ctx.lineWidth = 2;
-      for (const [i, j] of adjacentPairs) {
-        const kp1 = keypoints[i];
-        const kp2 = keypoints[j];
-        if (kp1 && kp2 && kp1.score > 0.3 && kp2.score > 0.3) {
-          ctx.beginPath();
-          ctx.moveTo(kp1.x * scale + offsetX, kp1.y * scale + offsetY);
-          ctx.lineTo(kp2.x * scale + offsetX, kp2.y * scale + offsetY);
-          ctx.stroke();
-        }
-      }
-    }
-
-    async function setupDetector() {
-      if (detector) return detector;
-      await tf.ready();
-      detector = await poseDetection.createDetector(
-        poseDetection.SupportedModels.MoveNet,
-        { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
-      );
-      return detector;
-    }
-
-    async function detectPose() {
-      if (!running) return;
-      try {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const poses = await detector.estimatePoses(video);
-
-        if (poses.length > 0) {
-          const keypoints = poses[0].keypoints || [];
-
-          const scaleX = canvas.width / video.videoWidth;
-          const scaleY = canvas.height / video.videoHeight;
-          const scale = Math.max(scaleX, scaleY);
-          const offsetX = (canvas.width  - video.videoWidth  * scale) / 2;
-          const offsetY = (canvas.height - video.videoHeight * scale) / 2;
-
-          drawSkeleton(keypoints, scale, offsetX, offsetY);
-          drawKeypoints(keypoints, scale, offsetX, offsetY);
-        }
-
-        animationId = requestAnimationFrame(detectPose);
-      } catch (error) {
-        console.error(error);
-        stopCamera();
-      }
-    }
-
-    async function startCamera() {
-      if (running) return;
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false
-        });
-        streamRef = stream;
-        video.srcObject = stream;
-        await new Promise((resolve) => { video.onloadedmetadata = resolve; });
-        await video.play();
-        resizeCanvas();
-        await setupDetector();
-        running = true;
-        detectPose();
-      } catch (error) {
-        console.error(error);
-      }
-    }
-
-    function stopCamera() {
-      running = false;
-      if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
-      if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null; }
-      video.srcObject = null;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
-
-    // App Inventor control
-    function receiveFromApp(command) {
-      if (command === 'start') startCamera();
-      else if (command === 'stop') stopCamera();
-    }
-  </script>
-</body>
-</html>etectPose() {
-      if (!running) return;
-      try {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-        const poses = await detector.estimatePoses(video);
-        if (poses.length > 0) {
-          const keypoints = poses[0].keypoints || [];
-          drawSkeleton(keypoints);
-          drawKeypoints(keypoints);
-        }
-        animationId = requestAnimationFrame(detectPose);
-      } catch (error) {
-        console.error(error);
-        stopCamera();
-      }
-    }
-
-    async function startCamera() {
-      if (running) return;
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-          audio: false
-        });
-        streamRef = stream;
-        video.srcObject = stream;
-        await new Promise((resolve) => { video.onloadedmetadata = resolve; });
-        await video.play();
-        resizeCanvas();
-        await setupDetector();
-        running = true;
-        detectPose();
-      } catch (error) {
-        console.error(error);
-      }
-    }
-
-    function stopCamera() {
-      running = false;
-      if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
-      if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null; }
-      video.srcObject = null;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
-
-    // App Inventor control
-    function receiveFromApp(command) {
-      if (command === 'start') startCamera();
-      else if (command === 'stop') stopCamera();
-    }
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>
