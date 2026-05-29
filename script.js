@@ -412,8 +412,9 @@ function compute(row){
       0,
       cfg
     );
-    document.getElementById("repCount").textContent = count_L;
-
+    if (window.AppInventor) {
+      window.AppInventor.setWebViewString(count_L);
+    }
     document.getElementById("output").textContent =
     `row:
     [${row.join(", ")}]
@@ -440,9 +441,7 @@ function compute(row){
     } else {
       bar.style.background = "red";
     }
-    if (window.AppInventor) {
-      window.AppInventor.setWebViewString(accuracyScore.toFixed(1));
-    }
+
 }
 
 
