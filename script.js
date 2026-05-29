@@ -7,6 +7,38 @@ let animationId = null;
 let streamRef = null;
 let running = false;
 
+// ── rep counter persistent state ──────────────────────
+let rep_initialized = false;
+let count_p = 0;
+let state_p = 0;
+let angleDiffFilt_p = 0;
+let fastSlowWarning_p = 0;
+let highAngle = NaN;
+let lowAngle = NaN;
+let highTime = NaN;
+let lowTime = NaN;
+let rep_prev_angle = null;
+function getExeRepCfg(caseId) {
+  switch (caseId) {
+    case 1: // squat
+      return {
+        alpha:         0.20,
+        highThresh:    2.5,
+        lowThresh:    -2.5,
+        minAmp:        5.0,
+        minPeriod:     0.4,
+        maxPeriod:     5.0,
+        startTime:     10.0,
+        minPeriodWrn:  1.0,
+        maxPeriodWrn:  4.0,
+      };
+    default:
+      return null;
+  }
+}
+const cfg = getExeRepCfg(1);
+
+
 function resizeCanvas() {
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
@@ -49,7 +81,7 @@ async function setupDetector() {
     await tf.ready();
     detector = await poseDetection.createDetector(
     poseDetection.SupportedModels.MoveNet,
-    { modelType: poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING }
+    { modelType: poseDetection.movenet.modelType.SINGLEPOSE_THUNDER }
     );
     return detector;
 }
@@ -98,6 +130,7 @@ async function startCamera() {
     resizeCanvas();
     await setupDetector();
     running = true;
+    //starts detection
     detectPose();
     } catch (error) {
     console.error(error);
@@ -110,12 +143,6 @@ function stopCamera() {
     if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null; }
     video.srcObject = null;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-}
-
-// App Inventor control
-function receiveFromApp(command) {
-    if (command === 'start') startCamera();
-    else if (command === 'stop') stopCamera();
 }
 
 function getJointAngle(threePoints) {
@@ -149,8 +176,8 @@ function getJointAngle(threePoints) {
   vector2 = [vector2[0] / norm2, vector2[1] / norm2];
 
   const dotProduct = vector1[0] * vector2[0] + vector1[1] * vector2[1];
-
-  return Math.acos(dotProduct); // angle in radians
+  const clamped = Math.max(-1, Math.min(1, dotProduct)); // clamp to [-1, 1]
+  return Math.acos(clamped); // ✅ never NaN
 }
 function formatMoveNetPointsForMatlab(pose) {
   const k = pose.keypoints;
@@ -198,7 +225,74 @@ function getPoint(row, idx) {
     row[2 + (idx - 1) * 2]
   ];
 }
+function count_exercise_rep(curTime, angle, reset, cfg) {
 
+    if (reset || !rep_initialized) {
+        rep_initialized   = true;
+        count_p           = 0;
+        state_p           = 0;
+        angleDiffFilt_p   = 0;
+        fastSlowWarning_p = 0;
+        highAngle         = NaN;
+        lowAngle          = NaN;
+        highTime          = NaN;
+        lowTime           = NaN;
+        rep_prev_angle    = angle;
+        return [count_p, state_p, angleDiffFilt_p, fastSlowWarning_p];
+    }
+
+    // filter angle diff
+    const angleDiff = angle - rep_prev_angle;
+    angleDiffFilt_p = cfg.alpha * angleDiff + (1 - cfg.alpha) * angleDiffFilt_p;
+
+    // ignore startup transient
+    if (curTime < cfg.startTime) {
+        rep_prev_angle = angle;
+        return [count_p, state_p, angleDiffFilt_p, fastSlowWarning_p];
+    }
+
+    // state machine
+    if (state_p === 0) {
+        if (angleDiffFilt_p > cfg.highThresh) {
+            highAngle = angleDiffFilt_p;
+            highTime  = curTime;
+            state_p   = 1;
+        }
+    } else if (state_p === 1) {
+        if (angleDiffFilt_p < cfg.lowThresh) {
+            lowAngle = angleDiffFilt_p;
+            lowTime  = curTime;
+            state_p  = 2;
+        }
+    } else if (state_p === 2) {
+        if (angleDiffFilt_p > cfg.highThresh) {
+            const repPeriod = curTime - highTime;
+            const repAmp    = Math.abs(highAngle - lowAngle);
+
+            if (repAmp >= cfg.minAmp &&
+                repPeriod >= cfg.minPeriod &&
+                repPeriod <= cfg.maxPeriod) {
+
+                count_p++;
+
+                if (repPeriod >= cfg.maxPeriodWrn) {
+                    fastSlowWarning_p = 2;
+                } else if (repPeriod <= cfg.minPeriodWrn) {
+                    fastSlowWarning_p = 1;
+                } else {
+                    fastSlowWarning_p = 0;
+                }
+            }
+
+            highAngle = angleDiffFilt_p;
+            highTime  = curTime;
+            state_p   = 1;
+        }
+    }
+
+    rep_prev_angle = angle;
+    return [count_p, state_p, angleDiffFilt_p, fastSlowWarning_p];
+}
 
 function hasInvalidPoint(points) {
   return points.some(pt => pt[0] < 0 || pt[1] < 0);
@@ -221,7 +315,7 @@ let ang2_x = null;
 let ang2_x2 = null;
 let ang2_sigma = 0;
 
-const tau = 1.5;
+const tau = 3;
 function compute(row){
     const pt6 = getPoint(row, 6);
     const pt8 = getPoint(row, 8);
@@ -287,6 +381,26 @@ function compute(row){
     const similarity = Math.hypot(
     ...normalizedFeature.map((v, i) => v - normalizedTemplate[i])
     );
+    const bestError = 0.05;
+    const worstError = 0.3113;
+
+    const accuracyScore = Math.max(
+      0,
+      Math.min(
+        100,
+        ((worstError - similarity) / (worstError - bestError)) * 100
+      )
+    );
+    const ang1Deg = ang1 * RTOD;
+    
+    const [count_L, state_L, angleDiffFilt_L, fastSlowWrn_L] = count_exercise_rep(
+      timeStamp,
+      ang1Deg,
+      0,
+      cfg
+    );
+    document.getElementById("repCount").textContent = count_L;
+
     document.getElementById("output").textContent =
     `row:
     [${row.join(", ")}]
@@ -302,13 +416,18 @@ function compute(row){
     similarity:
     ${similarity.toFixed(4)}`;
 
-    const maxSimilarity = 0.5;
-    const similarityPercent = Math.min(similarity / maxSimilarity, 1) * 100;
-
     document.getElementById("similarityBar").style.height =
-    `${similarityPercent}%`;
+    `${accuracyScore}%`;
 
     document.getElementById("similarityText").textContent =
-    `similarity: ${similarity.toFixed(4)}`;
+    `Accuracy: ${accuracyScore.toFixed(1)}/100`;
 }
 
+
+
+// App Inventor control
+function receiveFromApp(command) {
+    if (command === 'start') startCamera();
+    else if (command === 'stop') stopCamera();
+}
+startCamera();
