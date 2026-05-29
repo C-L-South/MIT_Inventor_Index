@@ -47,43 +47,46 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-function drawKeypoints(keypoints, scale, offsetX, offsetY) {
+function drawKeypoints(keypoints, scale, offsetX, offsetY, warningColor) {
+  const pointColor = warningColor || "#00ff8a";
+
   for (const kp of keypoints) {
     if (kp.score > 0.3) {
       const x = kp.x * scale + offsetX;
       const y = kp.y * scale + offsetY;
 
-      // dark outer ring
       ctx.beginPath();
       ctx.arc(x, y, 13, 0, Math.PI * 2);
       ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
       ctx.fill();
 
-      // bright green inner point
       ctx.beginPath();
       ctx.arc(x, y, 8, 0, Math.PI * 2);
-      ctx.fillStyle = "#00ff8a";
+      ctx.fillStyle = pointColor;
       ctx.fill();
     }
   }
 }
 
-function drawSkeleton(keypoints, scale, offsetX, offsetY) {
-    const adjacentPairs = poseDetection.util.getAdjacentPairs(
+function drawSkeleton(keypoints, scale, offsetX, offsetY, warningColor) {
+  const adjacentPairs = poseDetection.util.getAdjacentPairs(
     poseDetection.SupportedModels.MoveNet
-    );
-    ctx.strokeStyle = 'white';
-    ctx.lineWidth = 5;
-    for (const [i, j] of adjacentPairs) {
+  );
+
+  ctx.strokeStyle = warningColor || "white";
+  ctx.lineWidth = 5;
+
+  for (const [i, j] of adjacentPairs) {
     const kp1 = keypoints[i];
     const kp2 = keypoints[j];
+
     if (kp1 && kp2 && kp1.score > 0.3 && kp2.score > 0.3) {
-        ctx.beginPath();
-        ctx.moveTo(kp1.x * scale + offsetX, kp1.y * scale + offsetY);
-        ctx.lineTo(kp2.x * scale + offsetX, kp2.y * scale + offsetY);
-        ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(kp1.x * scale + offsetX, kp1.y * scale + offsetY);
+      ctx.lineTo(kp2.x * scale + offsetX, kp2.y * scale + offsetY);
+      ctx.stroke();
     }
-    }
+  }
 }
 
 async function setupDetector() {
@@ -112,8 +115,13 @@ async function detectPose() {
         const offsetX = (canvas.width  - video.videoWidth  * scale) / 2;
         const offsetY = (canvas.height - video.videoHeight * scale) / 2;
 
-        drawSkeleton(keypoints, scale, offsetX, offsetY);
-        drawKeypoints(keypoints, scale, offsetX, offsetY);
+        const allPointsVisible = keypoints.every(kp => kp.score > 0.3);
+        const warningColor = allPointsVisible ? null : "orange";
+        if (window.AppInventor && warningColor=="orange") {
+          window.AppInventor.setWebViewString("Please move your body so it is visible in the camera.");
+        }
+        drawSkeleton(keypoints, scale, offsetX, offsetY, warningColor);
+        drawKeypoints(keypoints, scale, offsetX, offsetY, warningColor);
 
 
         const row = formatMoveNetPointsForMatlab(poses[0]);
