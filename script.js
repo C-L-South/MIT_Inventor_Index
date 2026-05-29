@@ -48,22 +48,32 @@ window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
 function drawKeypoints(keypoints, scale, offsetX, offsetY) {
-    for (const kp of keypoints) {
+  for (const kp of keypoints) {
     if (kp.score > 0.3) {
-        ctx.beginPath();
-        ctx.arc(kp.x * scale + offsetX, kp.y * scale + offsetY, 5, 0, Math.PI * 2);
-        ctx.fillStyle = 'lime';
-        ctx.fill();
+      const x = kp.x * scale + offsetX;
+      const y = kp.y * scale + offsetY;
+
+      // dark outer ring
+      ctx.beginPath();
+      ctx.arc(x, y, 13, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(0, 0, 0, 0.85)";
+      ctx.fill();
+
+      // bright green inner point
+      ctx.beginPath();
+      ctx.arc(x, y, 8, 0, Math.PI * 2);
+      ctx.fillStyle = "#00ff8a";
+      ctx.fill();
     }
-    }
+  }
 }
 
 function drawSkeleton(keypoints, scale, offsetX, offsetY) {
     const adjacentPairs = poseDetection.util.getAdjacentPairs(
     poseDetection.SupportedModels.MoveNet
     );
-    ctx.strokeStyle = 'cyan';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'white';
+    ctx.lineWidth = 5;
     for (const [i, j] of adjacentPairs) {
     const kp1 = keypoints[i];
     const kp2 = keypoints[j];
@@ -90,6 +100,7 @@ async function detectPose() {
     if (!running) return;
     try {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+
     const poses = await detector.estimatePoses(video);
 
     if (poses.length > 0) {
@@ -120,7 +131,9 @@ async function startCamera() {
     if (running) return;
     try {
     const stream = await navigator.mediaDevices.getUserMedia({
-        video: true,
+        video: {
+            backgroundBlur: true
+        },
         audio: false
     });
     streamRef = stream;
@@ -315,7 +328,7 @@ let ang2_x = null;
 let ang2_x2 = null;
 let ang2_sigma = 0;
 
-const tau = 3;
+const tau= 3;
 function compute(row){
     const pt6 = getPoint(row, 6);
     const pt8 = getPoint(row, 8);
@@ -381,7 +394,7 @@ function compute(row){
     const similarity = Math.hypot(
     ...normalizedFeature.map((v, i) => v - normalizedTemplate[i])
     );
-    const bestError = 0.05;
+    const bestError = 0.01;
     const worstError = 0.3113;
 
     const accuracyScore = Math.max(
@@ -416,11 +429,20 @@ function compute(row){
     similarity:
     ${similarity.toFixed(4)}`;
 
-    document.getElementById("similarityBar").style.height =
-    `${accuracyScore}%`;
+    const bar = document.getElementById("similarityBar");
 
-    document.getElementById("similarityText").textContent =
-    `Accuracy: ${accuracyScore.toFixed(1)}/100`;
+    bar.style.width = `${accuracyScore}%`;
+
+    if (accuracyScore >= 66.67) {
+      bar.style.background = "lime";
+    } else if (accuracyScore >= 33.33) {
+      bar.style.background = "yellow";
+    } else {
+      bar.style.background = "red";
+    }
+    if (window.AppInventor) {
+      window.AppInventor.setWebViewString(accuracyScore.toFixed(1));
+    }
 }
 
 
