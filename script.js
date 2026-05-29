@@ -2,6 +2,10 @@ const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
+//for alerting
+let missingBodySince = null;
+let alertSent = false;
+
 let detector = null;
 let animationId = null;
 let streamRef = null;
@@ -117,21 +121,30 @@ async function detectPose() {
 
         const allPointsVisible = keypoints.every(kp => kp.score > 0.3);
         const warningColor = allPointsVisible ? null : "orange";
-        if (warningColor === "orange") {
-          if (bodyMissingSince === null) {
-            bodyMissingSince = Date.now();
+
+        if (!allPointsVisible) {
+
+          if (missingBodySince === null) {
+            missingBodySince = Date.now();
           }
 
           if (
-            window.AppInventor &&
-            Date.now() - bodyMissingSince >= 2000
+            !alertSent &&
+            Date.now() - missingBodySince >= 2000 &&
+            window.AppInventor
           ) {
+            alertSent = true;
             window.AppInventor.setWebViewString(
               "Please move your body so it is visible in the camera."
             );
           }
+
         } else {
-          bodyMissingSince = null;
+
+          // reset when body is visible again
+          missingBodySince = null;
+          alertSent = false;
+
         }
         drawSkeleton(keypoints, scale, offsetX, offsetY, warningColor);
         drawKeypoints(keypoints, scale, offsetX, offsetY, warningColor);
