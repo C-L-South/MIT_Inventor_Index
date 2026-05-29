@@ -117,8 +117,21 @@ async function detectPose() {
 
         const allPointsVisible = keypoints.every(kp => kp.score > 0.3);
         const warningColor = allPointsVisible ? null : "orange";
-        if (window.AppInventor && warningColor=="orange") {
-          window.AppInventor.setWebViewString("Please move your body so it is visible in the camera.");
+        if (warningColor === "orange") {
+          if (bodyMissingSince === null) {
+            bodyMissingSince = Date.now();
+          }
+
+          if (
+            window.AppInventor &&
+            Date.now() - bodyMissingSince >= 2000
+          ) {
+            window.AppInventor.setWebViewString(
+              "Please move your body so it is visible in the camera."
+            );
+          }
+        } else {
+          bodyMissingSince = null;
         }
         drawSkeleton(keypoints, scale, offsetX, offsetY, warningColor);
         drawKeypoints(keypoints, scale, offsetX, offsetY, warningColor);
