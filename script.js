@@ -5,7 +5,7 @@ const ctx = canvas.getContext('2d');
 //for alerting
 let missingBodySince = null;
 let alertSent = false;
-
+let startSignal=false;
 let detector = null;
 let animationId = null;
 let streamRef = null;
@@ -146,6 +146,10 @@ async function detectPose() {
           alertSent = false;
 
         }
+        if (window.AppInventor && startSignal==false) {
+          window.AppInventor.setWebViewString("Movenet Starting");
+          startSignal=true;
+        }
         drawSkeleton(keypoints, scale, offsetX, offsetY, warningColor);
         drawKeypoints(keypoints, scale, offsetX, offsetY, warningColor);
 
@@ -177,9 +181,7 @@ async function startCamera() {
     resizeCanvas();
     await setupDetector();
     running = true;
-    if (window.AppInventor) {
-      window.AppInventor.setWebViewString("Movenet Starting");
-    }
+
     //starts detection
     detectPose();
     } catch (error) {
