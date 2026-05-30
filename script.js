@@ -177,6 +177,9 @@ async function startCamera() {
     resizeCanvas();
     await setupDetector();
     running = true;
+    if (window.AppInventor) {
+      window.AppInventor.setWebViewString("Movenet Starting");
+    }
     //starts detection
     detectPose();
     } catch (error) {
