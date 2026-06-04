@@ -6,7 +6,10 @@
   <title>MoveNet</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-
+    video,
+    canvas {
+      display: none;
+    }
     body {
       background: #000;
       width: 100vw;
@@ -96,10 +99,8 @@
 .marker66 {
   left: 66.66%;
 }
-  </style>
-</head>
-<body>
-  
+
+</style>
   <div id="stage">
     <video id="video" autoplay playsinline muted></video>
     <canvas id="canvas"></canvas>
