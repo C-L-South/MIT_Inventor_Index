@@ -179,9 +179,10 @@ async function startCamera() {
     await new Promise((resolve) => { video.onloadedmetadata = resolve; });
     await video.play();
     resizeCanvas();
+
+    await setupDetector();
     video.style.display = "block";
     canvas.style.display = "block";
-    await setupDetector();
     running = true;
 
     //starts detection
