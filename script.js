@@ -181,8 +181,7 @@ async function startCamera() {
     resizeCanvas();
 
     await setupDetector();
-    video.style.display = "block";
-    canvas.style.display = "block";
+ 
     running = true;
 
     //starts detection
