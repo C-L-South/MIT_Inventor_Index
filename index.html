@@ -6,8 +6,12 @@
   <title>MoveNet</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    video,
+    canvas {
+      display: none;
+    }
     body {
-      background: #000;
+      background: #fff;
       width: 100vw;
       height: 100vh;
       overflow: hidden;
@@ -26,7 +30,7 @@
       width: 100vw;
       height: 100vh;
       object-fit: cover;
-      display: none;
+      display: block;
       transform: scaleX(-1);
     }
 
