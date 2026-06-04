@@ -178,6 +178,8 @@ async function startCamera() {
     video.srcObject = stream;
     await new Promise((resolve) => { video.onloadedmetadata = resolve; });
     await video.play();
+    video.style.display = "block";
+    canvas.style.display = "block";
     resizeCanvas();
     await setupDetector();
     running = true;
@@ -191,9 +193,22 @@ async function startCamera() {
 
 function stopCamera() {
     running = false;
-    if (animationId) { cancelAnimationFrame(animationId); animationId = null; }
-    if (streamRef) { streamRef.getTracks().forEach(t => t.stop()); streamRef = null; }
+
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
+
+    if (streamRef) {
+        streamRef.getTracks().forEach(t => t.stop());
+        streamRef = null;
+    }
+
     video.srcObject = null;
+
+    video.style.display = "none";
+    canvas.style.display = "none";
+
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
