@@ -1,7 +1,9 @@
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
-
+//accuracy 
+let totalAccuracy = 0;
+let accuracyFrames = 0;
 //for alerting
 let missingBodySince = null;
 let alertSent = false;
@@ -216,6 +218,18 @@ function stopCamera() {
         streamRef = null;
     }
 
+    const averageAccuracy =
+        accuracyFrames > 0
+            ? totalAccuracy / accuracyFrames
+            : 0;
+
+    if (window.AppInventor) {
+        window.AppInventor.setWebViewString(
+            averageAccuracy.toFixed(1)
+        );
+    }
+    totalAccuracy = 0;
+    accuracyFrames = 0;
     video.srcObject = null;
 
     video.style.display = "none";
@@ -470,6 +484,9 @@ function compute(row){
         ((worstError - similarity) / (worstError - bestError)) * 100
       )
     );
+    totalAccuracy += accuracyScore;
+    accuracyFrames++;
+  
     const ang1Deg = ang1 * RTOD;
     
     const [count_L, state_L, angleDiffFilt_L, fastSlowWrn_L] = count_exercise_rep(
