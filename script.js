@@ -479,7 +479,7 @@ function compute(row){
       cfg
     );
     if (window.AppInventor) {
-      window.AppInventor.setWebViewString(`${count_L},${fastSlowWrn_L}`);
+      window.AppInventor.setWebViewString(`${count_L} ${fastSlowWrn_L}`);
     }
     document.getElementById("output").textContent =
     `row:
