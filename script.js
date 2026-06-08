@@ -225,7 +225,7 @@ function stopCamera() {
 
     if (window.AppInventor) {
       window.AppInventor.setWebViewString(
-          `Accuracy: ${averageAccuracy.toFixed(1)}`
+          `Accuracy: ${averageAccuracy.toFixed(0)}`
       );
     }
     totalAccuracy = 0;
