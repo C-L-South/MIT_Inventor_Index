@@ -42,7 +42,9 @@ function getExeRepCfg(caseId) {
       return null;
   }
 }
-const cfg = getExeRepCfg(1);
+
+
+
 
 
 function resizeCanvas() {
@@ -177,7 +179,7 @@ async function detectPose() {
     }
 }
 
-async function startCamera() {
+async function startCamera(type) {
     if (running) return;
     try {
     const stream = await navigator.mediaDevices.getUserMedia({
@@ -195,8 +197,22 @@ async function startCamera() {
     resizeCanvas();
 
     await setupDetector();
- 
+    
     running = true;
+    if(type=="Squat"){
+      const cfg = getExeRepCfg(1);
+      if (window.AppInventor) {
+        window.AppInventor.setWebViewString(
+           "Working!"
+        );
+      }
+    } else if(type=="Bend"){
+
+    } else if(type=="Lunge"){
+
+    } else if(type=="Child"){
+
+    }
 
     //starts detection
     detectPose();
@@ -528,10 +544,3 @@ function compute(row){
 }
 
 
-
-// App Inventor control
-function receiveFromApp(command) {
-    if (command === 'start') startCamera();
-    else if (command === 'stop') stopCamera();
-}
-startCamera();
