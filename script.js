@@ -1,5 +1,4 @@
-console.log("SCRIPT LOADED");
-alert("SCRIPT LOADED");
+
 
 const video = document.getElementById('video');
 const canvas = document.getElementById('canvas');
@@ -550,4 +549,4 @@ function compute(row){
     }
 
 }
-startCamera("Squat");
+
