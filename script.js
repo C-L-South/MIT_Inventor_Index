@@ -543,5 +543,4 @@ function compute(row){
     }
 
 }
-
-
+startCamera("Squat");
