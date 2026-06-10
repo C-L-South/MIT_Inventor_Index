@@ -24,6 +24,7 @@ let lowAngle = NaN;
 let highTime = NaN;
 let lowTime = NaN;
 let rep_prev_angle = null;
+let cfg = null;
 function getExeRepCfg(caseId) {
   switch (caseId) {
     case 1: // squat
