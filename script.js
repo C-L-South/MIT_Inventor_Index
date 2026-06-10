@@ -206,6 +206,7 @@ async function startCamera(type) {
         window.AppInventor.setWebViewString(
            "Working!"
         );
+        console.log("startCamera called with:", type);
       }
     } else if(type=="Bend"){
 
@@ -427,6 +428,10 @@ let ang2_sigma = 0;
 
 const tau= 3;
 function compute(row){
+    if (!cfg) {
+      console.log("cfg not set yet");
+      return;
+    }
     const pt6 = getPoint(row, 6);
     const pt8 = getPoint(row, 8);
     const pt2 = getPoint(row, 2);
