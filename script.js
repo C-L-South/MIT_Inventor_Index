@@ -209,7 +209,6 @@ async function startCamera(type) {
         window.AppInventor.setWebViewString(
            "Working!"
         );
-        console.log("startCamera called with:", type);
       }
     } else if(type=="Bend"){
 
