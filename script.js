@@ -201,7 +201,7 @@ async function startCamera(type) {
     
     running = true;
     if(type=="Squat"){
-      const cfg = getExeRepCfg(1);
+      cfg = getExeRepCfg(1);
       if (window.AppInventor) {
         window.AppInventor.setWebViewString(
            "Working!"
